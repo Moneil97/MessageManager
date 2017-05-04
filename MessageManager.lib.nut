@@ -59,7 +59,7 @@ const MM_HANDLER_NAME_ON_TIMEOUT        = "onTimeout";
 
 class MessageManager {
 
-    static VERSION = "2.0.0";
+    static VERSION = "2.1.0";
 
     // Queue of messages that are pending for acknowledgement
     _sentQueue = null;
@@ -130,8 +130,20 @@ class MessageManager {
     // Global handler to be called when a message is acknowledged
     _onAck = null;
 
+    // Global handler to be called prior to the onAck handler(s) being called
+    _beforeOnAck = null;
+
     // Global handler to be called when a message is replied
     _onReply = null;
+
+    // Global handler to be called prior to the onReply handler(s) being called
+    _beforeOnReply = null;
+
+    // Global handler to be called when any data message is received
+    _beforeOnData = null;
+
+    // Global handler to be called prior to any message being replied
+    _beforeReply = null;
 
     // User defined callback to generate next message id
     _nextIdGenerator = null;
@@ -470,6 +482,19 @@ class MessageManager {
         _onAck = handler;
     }
 
+    // Sets the handler to be called before caling the onAck handler(s)
+    //
+    // Parameters:
+    //      handler         The handler to be called. It has signature:
+    //                      handler(message)
+    //                      Paremeters:
+    //                          message         The message that was acked
+    //
+    // Returns:             Nothing
+    function beforeOnAck(handler) {
+        _beforeOnAck = handler;
+    }
+
     // Sets the handler to be called when the message is replied
     //
     // Parameters:
@@ -481,6 +506,44 @@ class MessageManager {
     // Returns:             Nothing
     function onReply(handler) {
         _onReply = handler;
+    }
+
+    // Sets the handler to be called before calling the onReply handler(s)
+    //
+    // Parameters:
+    //      handler         The handler to be called. It has signature:
+    //                      handler(message, response), where
+    //                          message         The message that received a reply
+    //                          response        Response received as reply
+    //
+    // Returns:             Nothing
+    function beforeOnReply(handler) {
+        _beforeOnReply = handler;
+    }
+
+    // Sets the handler to be called before calling "on" handlers
+    //
+    // Parameters:
+    //      handler         The handler to be called. It has signature:
+    //                      handler(name, payload), where
+    //                          name         The message name
+    //                          response     The message payload
+    //
+    // Returns:             Nothing
+    function beforeOnData(handler) {
+        _beforeOnData = handler;
+    }
+
+    // Sets the handler to be called before calling a reply is sent
+    //
+    // Parameters:
+    //      handler         The handler to be called. It has signature:
+    //                      handler(replyPayload), where
+    //                          replyPayload    The payload of the reply to be sent
+    //
+    // Returns:             Nothing
+    function beforeReply(handler) {
+        _beforeReply = handler;
     }
 
     // Returns the overall number of pending messages
@@ -772,17 +835,23 @@ class MessageManager {
         local handlerFound = false;
         local error = 0;
 
+        _isFunc(_beforeOnData) && _beforeOnData(name, payload);
+
         if (name in _on) {
             local handler = _on[name];
             if (_isFunc(handler)) {
                 handlerFound = true;
                 handler(payload, function/*reply*/(data = null) {
                     replied = true;
-                    error = _partner.send(MM_MESSAGE_TYPE_REPLY, {
-                        "id"   : payload["id"],
-                        "data" : data
-                    });
-                });
+
+                    local replyPayload = {
+                      "id"   : payload["id"],
+                      "data" : data
+                    }
+
+                    _isFunc(_beforeReply) && _beforeReply(replyPayload);
+                    error = _partner.send(MM_MESSAGE_TYPE_REPLY, replyPayload);
+                }.bindenv(this));
             }
         }
 
@@ -817,6 +886,7 @@ class MessageManager {
         if (id in _sentQueue) {
             local msg = _sentQueue[id];
 
+            _isFunc(_beforeOnAck) && msg._beforeOnAck(msg);
             _isFunc(msg._onAck) && msg._onAck(msg);
             _isFunc(_onAck) && _onAck(msg);
 
@@ -891,6 +961,7 @@ class MessageManager {
             _isFunc(_onAck) && _onAck(msg);
 
             // Then call the global handlers
+            _isFunc(_beforeOnReply) && _beforeOnReply(msg, payload);
             _isFunc(msg._onReply) && msg._onReply(msg, payload["data"]);
             _isFunc(_onReply) && _onReply(msg, payload["data"]);
 
