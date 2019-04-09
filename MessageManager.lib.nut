@@ -1,6 +1,27 @@
-// Copyright (c) 2016-2017 Electric Imp
-// This file is licensed under the MIT License
-// http://opensource.org/licenses/MIT
+// MIT License
+//
+// Copyright 2016-2017 Electric Imp
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+// EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+
 
 // Default configuration values
 const MM_DEFAULT_DEBUG                  = 0;
@@ -38,7 +59,7 @@ const MM_HANDLER_NAME_ON_TIMEOUT        = "onTimeout";
 
 class MessageManager {
 
-    static VERSION = "1.0.2";
+    static VERSION = "2.1.0";
 
     // Queue of messages that are pending for acknowledgement
     _sentQueue = null;
@@ -121,7 +142,7 @@ class MessageManager {
     // Global handler to be called when any data message is received
     _beforeOnData = null;
 
-    // Global handler to be called when before the reply is sent
+    // Global handler to be called prior to any message being replied
     _beforeReply = null;
 
     // User defined callback to generate next message id
@@ -169,6 +190,9 @@ class MessageManager {
         // Handler to be called when the message is replied
         _onReply = null;
 
+        // Flag indicating that the message was acknowledged
+        _acked = null;
+
         // Data message constructor
         // Constructor is not going to be called from the user code
         //
@@ -189,6 +213,7 @@ class MessageManager {
                 "created": time()
             };
             this.tries = 0;
+            this._acked = false;
             this.metadata = metadata;
             this._timeout = timeout;
             this._nextRetry = 0;
@@ -314,8 +339,11 @@ class MessageManager {
             _cm.onConnect(_onConnect.bindenv(this));
             _cm.onDisconnect(_onDisconnect.bindenv(this));
 
-            // Make sure we are connected and the onConnect callback is triggered
-            _cm.connect();
+            // On device side make sure we are connected and the
+            // onConnect callback is triggered to notify the agent
+            if (!_isAgent()) {
+                _cm.connect();
+            }
         }
     }
 
@@ -484,9 +512,9 @@ class MessageManager {
     //
     // Parameters:
     //      handler         The handler to be called. It has signature:
-    //                      handler(message, payload), where
+    //                      handler(message, response), where
     //                          message         The message that received a reply
-    //                          payload         Full response payload
+    //                          response        Response received as reply
     //
     // Returns:             Nothing
     function beforeOnReply(handler) {
@@ -499,19 +527,19 @@ class MessageManager {
     //      handler         The handler to be called. It has signature:
     //                      handler(name, payload), where
     //                          name         The message name
-    //                          payload      The full data payload
+    //                          response     The message payload
     //
     // Returns:             Nothing
     function beforeOnData(handler) {
         _beforeOnData = handler;
     }
 
-    // Sets the handler to be called before sending a reply
+    // Sets the handler to be called before calling a reply is sent
     //
     // Parameters:
     //      handler         The handler to be called. It has signature:
-    //                      handler(payload), where
-    //                          payload         The reply playload
+    //                      handler(replyPayload), where
+    //                          replyPayload    The payload of the reply to be sent
     //
     // Returns:             Nothing
     function beforeReply(handler) {
@@ -612,16 +640,16 @@ class MessageManager {
         // Clean up the timer
         _queueTimer = null;
 
-        local t     = time();
+        local now   = time();
         local drop  = true;
 
         // Process timed out messages from the sent (waiting for ack) queue
         foreach (id, msg in _sentQueue) {
             local timeout = msg._timeout ? msg._timeout : _msgTimeout;
-            if (t - msg._sent > timeout) {
+            if (now - msg._sent > timeout) {
                 local wait = function(duration = null) {
                     local delay = duration != null ? duration : timeout;
-                    msg._timeout = t - msg._sent + delay;
+                    msg._timeout = now - msg._sent + delay;
                     drop = false;
                 }.bindenv(this);
 
@@ -629,8 +657,10 @@ class MessageManager {
                     _callOnFail(msg, MM_ERR_USER_CALLED_FAIL);
                 }.bindenv(this);
 
-                _isFunc(msg._onTimeout) && msg._onTimeout(msg, wait, fail);
-                _isFunc(_onTimeout) && _onTimeout(msg, wait, fail);
+                if (!msg._acked) {
+                    _isFunc(msg._onTimeout) && msg._onTimeout(msg, wait, fail);
+                    _isFunc(_onTimeout) && _onTimeout(msg, wait, fail);
+                }
 
                 if (drop) {
                     delete _sentQueue[id];
@@ -652,10 +682,10 @@ class MessageManager {
     //
     // Returns:             Nothing
     function _processRetryQueue() {
-        local t = time();
+        local now = time();
         // Process retry message queue
         foreach (id, msg in _retryQueue) {
-            if (t >= msg._nextRetry) {
+            if (now >= msg._nextRetry) {
                 _retry(msg);
             }
         }
@@ -863,6 +893,8 @@ class MessageManager {
             // Delete the acked message from the queue if there is no _onReply handler set (either global or message-specific)
             if (!_isFunc(msg._onReply) && !_isFunc(_onReply)) {
                 delete _sentQueue[id]
+            } else {
+                msg._acked = true;
             }
         }
     }
