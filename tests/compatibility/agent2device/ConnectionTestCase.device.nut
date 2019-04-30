@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2017 Electric Imp
+// Copyright 2017-2019 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -27,7 +27,7 @@
 @include __PATH__+"/../../Base.nut"
 
 local mm = MessageManager({
-    "connectionManager": getConnectionManager(true),
+    "connectionManager": getConnectionManager(true, {"startBehavior": CM_START_CONNECTED}),
     "onPartnerConnected": function(reply) {
         reply(REPLY_NO_MESSAGES);
     }.bindenv(this)

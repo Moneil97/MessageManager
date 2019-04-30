@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2017 Electric Imp
+// Copyright 2017-2019 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -47,7 +47,7 @@ class ConnectionRealTestCase extends ImpTestCase {
                 "nextIdGenerator":    msgIdGenerator,
                 "onPartnerConnected": onPartnerConnected.bindenv(this)
             });
-            imp.wakeup(2, function() {
+            imp.wakeup(5, function() {
                 try {
                     assertTrue(partnerConnected, "Partner is not connected");
                     resolve();

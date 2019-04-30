@@ -1,7 +1,5 @@
 # MessageManager 2.4.0 #
 
-[![Build Status](https://api.travis-ci.org/electricimp/MessageManager.svg?branch=master)](https://travis-ci.org/electricimp/MessageManager)
-
 MessageManager is framework for asynchronous bidirectional agent to device communication. It is the successor to [Bullwinkle](https://github.com/electricimp/Bullwinkle).
 
 The library uses [ConnectionManager](https://github.com/electricimp/ConnectionManager) on the device side to receive notifications of connection and disconnection events, and to monitor connection status (ie. so that no attempt it made to send messages when the device is disconnected).
@@ -9,6 +7,8 @@ The library uses [ConnectionManager](https://github.com/electricimp/ConnectionMa
 **To include this library in your project, add** `#require "MessageManager.lib.nut:2.4.0"` **at the top of your agent and device code.**
 
 **Note** MessageManager is designed to run over reliable (ie. TCP/TLS) connections. Retries only occur in the case of dropped connections or lost packets, or if called manually from [*beforeSend()*](#mmanager_before_send) or [*beforeRetry()*](#mmanager_before_retry).
+
+![Build Status](https://cse-ci.electricimp.com/app/rest/builds/buildType:(id:MessageManager_BuildAndTest)/statusIcon)
 
 ## API Overview ##
 
@@ -46,19 +46,19 @@ to be send over the air and meta-information used to control the message lifecyc
 Calling the MessageManager constructor creates a new MessageManager instance. An optional
 table can be passed into the constructor (as *options*) to override default behaviours. *options* can contain any of the following keys:
 
-| Key | Data Type | Default Value | Description |
-| ----- | -------------- | ------------------ | --------------- |
-| *debug* | Boolean | `false` | The flag that enables debug library mode, which turns on extended logging |
-| *retryInterval* | Integer | 0 | Changes the default timeout parameter passed to the [retry](#mmanager_retry) method |
-| *messageTimeout* | Integer | 10 | Changes the default timeout required before a message is considered failed (to be acknowledged or replied to) |
-| *autoRetry* | Boolean | `false` | If set to `true`, MessageManager will automatically continue to retry sending a message until *maxAutoRetries* has been reached when no [onFail()](#mmanager_on_fail) callback is supplied. Please note that if *maxAutoRetries* is set to 0, *autoRetry* will have no limit to the number of times it will retry |
-| *maxAutoRetries* | Integer | 0 | Changes the default number of automatic retries to be performed by the library. After this number is reached the message will be dropped. Please note that the message will automatically be retried if there is no [onFail()](#mmanager_on_fail) callback registered by the user |
-| *connectionManager* | [ConnectionManager](https://github.com/electricimp/ConnectionManager) | `null` | Optional instance of the [ConnectionManager](https://github.com/electricimp/ConnectionManager) library that helps MessageManager track connectivity status |
-| *nextIdGenerator* | Function | `null` | User-defined callback that generates the next message ID. The function has no parameters |
-| *onPartnerConnected* | Function | `null` | Sets the callback to be triggered when the partner is known to be connected. The callback’s signature is: *callbackName(reply)*, where *reply(data)* is a callback to respond to the “connected” event |
-| *onConnectedReply* | Function | `null` | Sets the callback to be triggered when the partner responds to the connected status. The callback’s signature is: *callbackName(response)*, where *response* is the response data |
-| *maxMessageRate* | Integer | 10 | Maximum message send rate, which defines the maximum number of messages the library allows to send per second. If the application exceeds the limit, the *onFail* callback is triggered.<br />**Note** please don’t change the value unless absolutely necessary |
-| *firstMessageId* | Integer | 0 | Initial value for the auto-incrementing message ID |
+| Key | Data&nbsp;Type | Description |
+| ---- | --- | --- |
+| *debug* | Boolean | The flag that enables debug library mode, which turns on extended logging. Default: `false` |
+| *retryInterval* | Integer | Changes the default timeout parameter passed to the retry method. Default: 0s |
+| *messageTimeout* | Integer | Changes the default timeout required before a message is considered failed (to be acknowledged or replied to). Default: 10s |
+| *autoRetry* | Boolean | If set to `true`, MessageManager will automatically continue to retry sending a message until *maxAutoRetries* has been reached when no [onFail()](#mmanager_on_fail) callback is supplied. Please note that if *maxAutoRetries* is set to 0, *autoRetry* will have no limit to the number of times it will retry. Default: `false` |
+| *maxAutoRetries* | Integer | Changes the default number of automatic retries to be performed by the library. After this number is reached the message will be dropped. Please note that the message will automatically be retried if there is no [onFail()](#mmanager_on_fail) callback registered by the user. Default: 0 |
+| *connectionManager* | [ConnectionManager](https://github.com/electricimp/ConnectionManager) | Optional instance of the [ConnectionManager](https://github.com/electricimp/ConnectionManager) library that helps MessageManager track connectivity status. Default: `null` |
+| *nextIdGenerator* | Function | User-defined callback that generates the next message ID. The function has no parameters. Default: `null` |
+| *onPartnerConnected* | Function | Sets the callback to be triggered when the partner is known to be connected. The callback’s signature is: *callbackName(reply)*, where *reply(data)* is a callback to respond to the “connected” event. Default: `null` |
+| *onConnectedReply* | Function | Sets the callback to be triggered when the partner responds to the connected status. The callback’s signature is: *callbackName(response)*, where *response* is the response data. Default: `null` |
+| *maxMessageRate* | Integer | Maximum message send rate, which defines the maximum number of messages the library allows to send per second. If the application exceeds the limit, the *onFail* callback is triggered. Default: 10 messages/s<br />**Note** please don’t change the value unless absolutely necessary |
+| *firstMessageId* | Integer | Initial value for the auto-incrementing message ID. Default: 0 |
 
 #### Examples ####
 
@@ -77,13 +77,12 @@ local cm = ConnectionManager({
 imp.setsendbuffersize(8096);
 
 // MessageManager options
-local options = {
-    "debug": true,
-    "retryInterval": 15,
-    "messageTimeout": 2,
-    "autoRetry": true,
-    "maxAutoRetries": 10,
-    "connectionManager": cm
+local options = { "debug": true,
+                  "retryInterval": 15,
+                  "messageTimeout": 2,
+                  "autoRetry": true,
+                  "maxAutoRetries": 10,
+                  "connectionManager": cm
 };
 
 local mm = MessageManager(options);
@@ -91,7 +90,7 @@ local mm = MessageManager(options);
 
 <div id="mmanager_send"><h3>MessageManager.send(<i>name[, data][, callbacks][, timeout][, metadata]</i>)</h3></div>
 
-This method sends a named message to the partner side and returns the [MessageManager.DataMessage](#mmanager_data_message) object created. The *data* parameter can be a basic Squirrel type (`1`, `true`, `"A String"`) or more complex data structures such as an array or table, but it must be [a serializable Squirrel value](https://developer.electricimp.com/resources/serialisablesquirrel/).
+This method sends a named message to the partner side and returns the [MessageManager.DataMessage](#mmanager_data_message) object created. The *data* parameter can be a basic Squirrel type (`1`, `true`, `"A String"`) or more complex data structures such as an array or table, but it must be [a serializable Squirrel value](https://developer.electricimp.com/resources/serialisablesquirrel).
 
 ```squirrel
 mm.send("lights", true);   // Turn on the lights
@@ -99,7 +98,7 @@ mm.send("lights", true);   // Turn on the lights
 
 *callbacks* is a table containing the local message event callback functions. The library uses the key name to determine which callback-registration method to use. For example, if the table contains the key *onAck*, the key’s value (which should be a function) will be passed into *MessageManager.DataMessage.onAck()* in order to register it as the acknowledgement callback.
 
-| Key | Registration Method | Description | 
+| Key | Registration&nbsp;Method | Description | 
 | --- | --- | --- |
 | *onAck* | [MessageManager.DataMessage.onAck](#mmanager_data_message_on_ack) | Acknowledgement |
 | *onFail*| [MessageManager.DataMessage.onFail](#mmanager_data_message_on_fail) | Failure |

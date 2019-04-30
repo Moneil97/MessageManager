@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2017 Electric Imp
+// Copyright 2017-2019 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -101,8 +101,26 @@ class DummyConnectionManager {
     _onDisconnect = null;
     _onConnect = null;
 
+    static VERSION = "3.1.0";
+
     function constructor(settings = {}) {
         _connected = true;
+        
+        local startBehavior = ("startBehavior"   in settings) ? settings.startBehavior   : CM_START_NO_ACTION;
+
+        switch (startBehavior) {
+            case CM_START_NO_ACTION:
+                // Do nothing
+                break;
+            case CM_START_CONNECTED:
+                // Start connecting if they ask for it
+                imp.wakeup(0, connect.bindenv(this));
+                break;
+            case CM_START_DISCONNECTED:
+                // Disconnect if required
+                imp.wakeup(0, disconnect.bindenv(this));
+                break;
+        }
     }
 
     function isConnected() {
@@ -119,11 +137,11 @@ class DummyConnectionManager {
         _isFunc(_onConnect) && _onConnect();
     }
 
-    function onDisconnect(handler) {
+    function onDisconnect(handler, id) {
         _onDisconnect = handler;
     }
 
-    function onConnect(handler) {
+    function onConnect(handler, id) {
         _onConnect = handler;
     }
 
