@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2017 Electric Imp
+// Copyright 2017-2019 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -31,7 +31,7 @@
 
 local params = {};
 if (!isAgentSide()) {
-    params["connectionManager"] <- getConnectionManager();
+    params["connectionManager"] <- getConnectionManager(true, {"startBehavior": CM_START_CONNECTED});
 }
 params["onPartnerConnected"] <- function(reply) {
     reply(REPLY_NO_MESSAGES);

@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2017 Electric Imp
+// Copyright 2017-2019 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -44,7 +44,7 @@ class ConnectionRealTestCase extends ImpTestCase {
             local mm = MessageManager({
                 "firstMessageId":     msgId,
                 "nextIdGenerator":    msgIdGenerator,
-                "connectionManager":  getConnectionManager(true),
+                "connectionManager":  getConnectionManager(true, {"startBehavior": CM_START_CONNECTED}),
                 "onConnectedReply":   onConnectedReply.bindenv(this)
             });
             imp.wakeup(2, function() {
